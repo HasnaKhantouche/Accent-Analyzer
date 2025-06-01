@@ -22,6 +22,7 @@ msgpack = "^1.0.0"
 soxr = "^0.3.7"
 lazy-loader = "^0.4.0"
 pydub = "^0.25.1"  # Added for audio fallback support
+yt-dlp = "^2025.5.22"
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0.0"

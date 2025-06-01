@@ -12,6 +12,7 @@ import torch
 import time
 import shutil
 import logging
+import yt_dlp
 
 # imageio-ffmpeg provides its own FFmpeg binary at install time
 import imageio_ffmpeg
@@ -43,20 +44,36 @@ def load_speech_recognizer():
 
 def download_direct_video(url):
     """
-    Download a direct video URL (MP4 or Loom) via HTTP.
-    Returns the path to the MP4 file, or (None, error_message, None) on failure.
+    Handles Loom and direct MP4 URLs using yt-dlp.
+    Returns (temp_file_path, error_message, video_title)
     """
     try:
-        response = requests.get(url, stream=True, timeout=30)
-        response.raise_for_status()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ydl_opts = {
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
+                'outtmpl': os.path.join(tmpdir, 'video.%(ext)s'),
+                'quiet': True,
+                'no_warnings': True,
+                'ffmpeg_location': imageio_ffmpeg.get_ffmpeg_exe(),
+            }
 
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmpfile:
-            for chunk in response.iter_content(chunk_size=8192):
-                tmpfile.write(chunk)
-            return tmpfile.name, None, "Direct Video"
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                video_title = info.get('title', 'Loom Video')
+                downloaded_file = ydl.prepare_filename(info)
+
+            # Find the downloaded file
+            if not os.path.exists(downloaded_file):
+                return None, "Downloaded file not found", None
+
+            # Copy to a permanent temp file
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmpfile:
+                shutil.copy(downloaded_file, tmpfile.name)
+                return tmpfile.name, None, video_title
+
     except Exception as e:
         return None, f"Download failed: {str(e)}", None
-
+        
 def extract_audio(video_path):
     """
     Use the FFmpeg binary provided by imageio-ffmpeg to extract a mono, 16kHz WAV from the downloaded MP4.
